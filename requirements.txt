@@ -1,0 +1,5 @@
+streamlit
+listennotes
+assemblyai
+yt_dlp
+spotipy
