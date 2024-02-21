@@ -1,5 +1,6 @@
 streamlit
 listennotes
+podcast-api
 assemblyai
 yt_dlp
 spotipy

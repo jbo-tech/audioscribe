@@ -39,7 +39,7 @@ def listennotes_get_data_by_search(episode_keyword):
         sort_by_date=0,
         type='episode',
         offset=0,
-        len_min=5,
+        len_min=3,
         len_max=180,
         published_after=0,
         only_in='title,description',
