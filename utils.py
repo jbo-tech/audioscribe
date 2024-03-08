@@ -1,4 +1,42 @@
 import re
+import requests
+
+def upload_file_url(file):
+    """
+    Uploads a file to a temporary storage service.
+
+    Parameters:
+    - file_path (str): The path to the file to be uploaded.
+
+    Returns:
+    - str: The response from the upload service.
+    """
+    # URL de l'API pour l'upload
+    url = 'https://tmpfiles.org/api/v1/upload'
+
+    try:
+        # Ouvrir le fichier en mode binaire
+        files = {'file': (file.name, file, file.type)}
+            
+        # Faire la requête POST avec le fichier
+        response = requests.post(url, files=files)
+
+        # Vérifier que la requête a réussi
+        if response.status_code == 200:
+            # Convertir la réponse en JSON
+            response_json = response.json()
+            
+            # Accéder à l'URL dans la réponse JSON
+            uploaded_file_page = response_json.get('data', {}).get('url', None)
+            uploaded_file_url = uploaded_file_page.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+            
+            return uploaded_file_url
+        else:
+            print(f"Failed to upload file. Status code: {response.status_code}")
+            return None
+    except Exception as e:
+        # Gérer les exceptions, par exemple si le fichier n'existe pas
+        return f"An error occurred: {e}"
 
 def sanitize_folder_name(folder_name):
     return re.sub(r'[<>:"/\\|?*\']+', '_', folder_name)
@@ -27,7 +65,8 @@ def convert_time_format(secondes_input):
         time_format += f"{heures} h "
     if minutes > 0 or heures > 0:  # Inclure les minutes si on a des heures même si minutes est 0
         time_format += f"{minutes} min "
-    time_format += f"{secondes_restantes} s"
+    if minutes > 0 or heures > 0 or secondes_restantes > 0:  # Inclure les minutes si on a des heures même si minutes est 0
+        time_format += f"{secondes_restantes} s"
 
     return time_format.strip()
 
@@ -40,3 +79,18 @@ def insert_spaces(word):
     # Remplace les caractères '&'
     spaced = spaced.replace('&', ' &')
     return spaced
+
+def youtube_url_is_playlist(url):
+    # Regex pour une URL de playlist YouTube
+    playlist_pattern = r'https://(www\.)?youtube\.com/playlist\?list=[\w-]+'
+    # Regex pour une URL de vidéo YouTube (forme classique)
+    video_pattern_classic = r'https://(www\.)?youtube\.com/watch\?v=[\w-]+'
+    # Regex pour une URL de vidéo YouTube (forme raccourcie)
+    video_pattern_short = r'https://youtu\.be/[\w-]+'
+
+    if re.match(playlist_pattern, url):
+        return True
+    elif re.match(video_pattern_classic, url) or re.match(video_pattern_short, url):
+        return False
+    else:
+        return False

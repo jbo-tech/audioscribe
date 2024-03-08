@@ -46,7 +46,7 @@ To start the AudioScribe application, run:
 streamlit run app.py
 ```
 
-Contributing
+## Contributing
 
 We welcome contributions to AudioScribe! If you have suggestions for improvements or encounter any issues, please feel free to open an issue or submit a pull request.
 
