@@ -18,7 +18,7 @@ from utils import (
     youtube_url_is_playlist
 )
 
-# Page config
+# Streamlit page configuration
 st.set_page_config(
     page_title="AudioScribe App : Audio To Text",
     page_icon="./assets/favicon.ico🧊",
@@ -32,41 +32,39 @@ st.set_page_config(
 )
 
 def determine_service_to_data(text):
-    # Enlever les espaces avant et après la chaîne
-    text = text.strip() 
-    # Patterns pour identifier les IDs de service
+    # Remove leading and trailing whitespace from input
+    text = text.strip()
+
+    # Regular expression patterns for service identification
     listen_notes_id_pattern = r"^[a-f0-9]{32}$"
     youtube_id_pattern = r"^[a-zA-Z0-9_-]{11}$"
     spotify_id_pattern = r"^[A-Za-z0-9]{22}$"
-    # YouTube et Spotify dans l'URL
+
+    # URL patterns for YouTube and Spotify
     youtube_url_pattern = r"(youtu\.be\/|youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})"
     spotify_url_pattern = r"spotify\.com\/episode\/([A-Za-z0-9]{22})"
-    # Vérification des URLs YouTube et Spotify
+
+    # Check for URL matches
     youtube_match = re.search(youtube_url_pattern, text)
     spotify_match = re.search(spotify_url_pattern, text)
 
-    # Listen Notes
+    # Service identification logic and data retrieval
     if re.match(listen_notes_id_pattern, text):
         data = listennotes_get_data_by_id(text)
         service_code = "ln"
-    # YouTube direct ID
     elif re.match(youtube_id_pattern, text):
         data = youtube_get_data_by_url(f"https://www.youtube.com/watch?v={text}")
-        service_code = "yt"        
-    # Spotify direct ID
+        service_code = "yt"
     elif re.match(spotify_id_pattern, text):
         data = spotify_get_data_by_id(text)
         service_code = "sp"
-    # YouTube URL
     elif youtube_match:
         data = youtube_get_data_by_url(text)
         service_code = "yt"
-    # Spotify URL
     elif spotify_match:
         spotify_id = spotify_match.group(1)
-        data = spotify_get_data_by_id(spotify_id) 
-        service_code = "sp"    
-    # Direct link
+        data = spotify_get_data_by_id(spotify_id)
+        service_code = "sp"
     elif text.startswith("http") and not youtube_match and not spotify_match:
         data = {
             'title': 'Not available',
@@ -75,20 +73,20 @@ def determine_service_to_data(text):
             'audio_length_sec': "60",
         }
         service_code = "dt"
-    # Par défaut, considérez tout autre texte comme une recherche Listen Notes
     else:
+        # Default: treat as Listen Notes search query
         data = listennotes_get_data_by_search(text)
         service_code = "ln"
 
     return (service_code, data)
 
 def listennotes_get_data_by_id(episode_id):
+    # Fetch episode data from Listen Notes API using ID
     response = client.fetch_episode_by_id(
         id=episode_id,
         show_transcript=1,
     )
     data = response.json()
-    #ln_audio_url = data['audio']
     data = {
         'title': data['title'],
         'link': data['link'],
@@ -98,7 +96,7 @@ def listennotes_get_data_by_id(episode_id):
     return data
 
 def listennotes_get_data_by_search(episode_keyword):
-    # Effectue une recherche d'épisode de podcast avec les critères spécifiés
+    # Search for podcast episodes using Listen Notes API
     response = client.search(
         q=episode_keyword,
         sort_by_date=0,
@@ -114,10 +112,9 @@ def listennotes_get_data_by_search(episode_keyword):
         page_size=10,
     )
     data_results = response.json()
-    # Vérification et affichage du premier résultat si disponible
+    # Process and return first search result if available
     if data_results['results']:
         data = data_results['results'][0]
-        #print(json.dumps(data, indent=4))  # Affiche les données formatées
         data = {
             'title': data['title'],
             'link': data['link'],
@@ -126,26 +123,25 @@ def listennotes_get_data_by_search(episode_keyword):
         }
         return data
     else:
-        print("Pas de réponse.")
-        exit(1)  # Arrête l'exécution si aucun résultat n'est trouvé
+        print("No results found.")
+        exit(1)
 
 def youtube_get_data_by_url(url):
     """
-    https://github.com/yt-dlp/yt-dlp/blob/5fb450a64c300056476cfef481b7b5377ff82d54/yt_dlp/YoutubeDL.py
-    Extrait l'URL de l'audio au format m4a d'une vidéo YouTube spécifiée par son URL.
-    :param URL (str): L'URL de la vidéo YouTube dont on souhaite extraire l'audio.
+    Extract audio URL (m4a format) from a YouTube video
+    Uses yt-dlp library: https://github.com/yt-dlp/yt-dlp/blob/5fb450a64c300056476cfef481b7b5377ff82d54/yt_dlp/YoutubeDL.py
     """
     try:
         with yt_dlp.YoutubeDL() as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as e:
-        print("Erreur lors de l'extraction des informations de la vidéo:", e)
+        print("Error extracting video information:", e)
         print ("caught: {}".format(error))
-        return "stop"  # Retourne "stop" si une erreur est capturée
+        return "stop"
 
+    # Find m4a audio format URL
     url_audio = None
-    #print(json.dumps(info, indent=4))
-    for format in info["formats"][::-1]:  # Parcours des formats en commençant par la fin
+    for format in info["formats"][::-1]:
         if format["resolution"] == "audio only" and format["ext"] == "m4a":
             url_audio = format["url"]
             break
@@ -158,78 +154,77 @@ def youtube_get_data_by_url(url):
     return data
 
 def spotify_get_data_by_id(id):
+    # Get Spotify episode info and search for corresponding Listen Notes episode
     info = sp.episode(id,market="FR")
     search_input = f"{info['name']} {info['show']['name']}"
     data = listennotes_get_data_by_search(search_input)
-    #print(info)
     return data
 
 def transc_send(audio_url):
+    # Initiate transcription with AssemblyAI
     transcript = transcriber.transcribe(audio_url)
-    transcript_id = transcript.id   
+    transcript_id = transcript.id
     return transcript_id
 
 def transc_get(transcript_id):
+    # Poll for transcription completion
     polling_response = aai.Transcript.get_by_id(transcript_id)
-    i=0
     while polling_response.status != 'completed':
         time.sleep(3)
         polling_response = aai.Transcript.get_by_id(transcript_id)
     return polling_response
 
 def summary_transcript(transcript):
+    # Generate French summary of transcript using AssemblyAI Lemur
     prompt = "Summarize key points from this transcript in 5 bullets. Reply in French."
     result = aai.Lemur().task(
         prompt,
         final_model=aai.LemurModel.basic,
         input_text=transcript,
-        #answer_format="Reply in French"
-        )
+    )
     return result
 
 def speaker_transcript(transcript):
-    if len(transcript.utterances) > 0: # Vérifier si 'utterances' est présent et contient des éléments
+    # Format transcript with speaker labels if available
+    if len(transcript.utterances) > 0:
         formatted_utterances = [f"Speaker {utterance.speaker} : {utterance.text}" for utterance in transcript.utterances]
         return "\n\n".join(formatted_utterances)
     else:
         return transcript.text
 
 def topic_transcript(transcript):
-    # print(transcript.iab_categories.summary)
+    # Extract and format transcript topics with confidence scores
     summary = transcript.iab_categories.summary
-    if len(summary) > 0: # Vérifier si 'utterances' est présent et contient des éléments
+    if len(summary) > 0:
         formatted_topics = [
             f"- {insert_spaces(last_element)} ({value * 100:.0f}%)"
             for key, value in summary.items() if value > 0.4
             for last_element in [key.split(">")[-1]]
-        ]        
+        ]
         return "\n".join(formatted_topics)
     else:
         return ""
 
 def entity_transcript(transcript):
-    # print(transcript.entities)
+    # Extract and format named entities from transcript
     if len(transcript.entities) > 0:
-        #entities_sorted = sorted(transcript.entities, key=lambda x: x["entity_type"])
         entities_sorted = transcript.entities
-        # Dictionnaire pour regrouper les entités par type
         grouped_entities = {}
-        # Boucle sur chaque entité pour les regrouper et retirer les doublons basés sur `text`
+        # Group entities by type and remove duplicates
         for entity in entities_sorted:
             entity_type = entity.entity_type
             text = entity.text
-            # Si le type d'entité n'existe pas encore, créer une nouvelle entrée avec un ensemble pour suivre les textes uniques
             if entity_type not in grouped_entities:
                 grouped_entities[entity_type] = set()
-            # Ajouter le texte à l'ensemble des textes uniques pour ce type d'entité
             grouped_entities[entity_type].add(text)
-        # Affichage des résultats groupés
+
         formatted_entities = []
         ignore_list = ["language", "nationality"]
+        # Format entities for display
         for entity_type, texts in grouped_entities.items():
             entity = entity_type.split(".")[-1]
             if entity.lower() in ignore_list:
-                continue  # Passe à la prochaine itération si entity est à ignorer            
+                continue
             formatted_entities.append(f"\n**{entity.capitalize()}**:")
             for text in texts:
                 formatted_entities.append(f"- {text.capitalize()}")
@@ -238,34 +233,27 @@ def entity_transcript(transcript):
         return ""
 
 def clip(text):
-    # Thanks to https://github.com/Aravind-krishnan-g/Streamlit-Clipboard
-    js_text = json.dumps(text) # Utilisation de json.dumps pour échapper correctement la chaîne
-
+    # Copy text to clipboard using JavaScript
+    js_text = json.dumps(text)
     html_string = f"""
         <script>window.parent.navigator.clipboard.writeText({js_text});console.log({js_text})</script>
     """
     components.html(html_string,height=0,width=0)
 
 def notify_and_copy(text,title):
-    # Copie la dernière transcription ajoutée
+    # Copy text and show success notification
     clip(text)
-    # Affiche une notification toast
     st.toast(f'{title} copied successfully!', icon='🎉')
-    # Ajoute la transcription à la liste des transcriptions copiées
     ss.copied.append(text)
 
 def disabled_submit_button_step_2():
+    # Toggle step 2 submit button state
     ss.disable_button_step_2 = not(ss.disable_button_step_2)
-
-def process_step_3_playlist(audio_url, **kwargs):
-    print("playlist")
 
 def simulate_progress(audio_length_sec, progress_bar, progress_messages):
     """
-    Simulates progress based on audio length and updates a progress bar with custom messages.
-    :param ln_audio_length_sec: Length of the audio in seconds.
-    :param progress_bar: The progress bar object to update.
-    :param progress_messages: A dictionary containing custom messages for specific progress percentages.
+    Display progress simulation based on audio length
+    Updates progress bar with custom messages at specific intervals
     """
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
@@ -276,10 +264,8 @@ def simulate_progress(audio_length_sec, progress_bar, progress_messages):
     if ss.completed:
         progress_bar.progress(100, text=f":sparkles: Waiting time : 0 s\n\nVoilà! Your transcription is ready!")
     else:
-        # Run the progress bar
         for percent_complete in range(100):
-            time.sleep(time_increment)  # Simulation d'un travail en cours
-            # Mise à jour du texte en fonction du pourcentage d'achèvement
+            time.sleep(time_increment)
             if percent_complete + 1 in progress_messages:
                 progress_text = progress_messages[percent_complete + 1]
             else:
@@ -289,37 +275,29 @@ def simulate_progress(audio_length_sec, progress_bar, progress_messages):
             progress_text = f":sparkles: Waiting time : {convert_time_format(time_total)}\n\n{progress_text}"
             st.spinner(progress_text)
             progress_bar.progress(percent_complete + 1, text=progress_text)
-        time.sleep(1)  # Pause avant de vider la barre de progression
-        #progress_bar.empty()  # Nettoyage de la barre de progression
+        time.sleep(1)
         st.balloons()
 
-def simulate_progress_time(audio_length_sec):
-    time_total = float(audio_length_sec) * 0.08
-    while time_total > 0:
-        print(time_total)
-        time.sleep(1)  # Simulation d'un travail en cours
-        ss.audio_length_sec_left = time_total
-        time_total = time_total - 1
-
 def process_transcription(audio_url, audio_title, audio_link):
+    # Process audio transcription and generate analysis
     now = datetime.now()
     current_time = now.strftime("%H:%M:%S")
     print("process start " + current_time)
-    # Initialise output
+
     output = ""
-    # Retrieve id of transcription response from AssemblyAI
     transcript_id = transc_send(ss.audio_url)
-    # Get the transcription
     transcript = transc_get(transcript_id)
-    # Transcription by speaker
+
+    # Generate various transcript analyses
     text = speaker_transcript(transcript)
     topics = topic_transcript(transcript)
     entities = entity_transcript(transcript)
     summary = transcript.summary
-    # Session logic
+
+    # Format output
     output += f"""
 ###
-Titre:\n
+Title:\n
 {audio_title.strip()}
 ###
 URL:\n
@@ -341,20 +319,20 @@ Entities:\n
     ss.transcription_result = output
     ss.completed = True
 
-# API Keys
+# API configuration
 listennotes_api = st.secrets.listennotes
 assemblyai_api = st.secrets.assemblyai
 spotify_api_id = st.secrets.spotify.id
 spotify_api_secret = st.secrets.spotify.secret
 
-# Configuration du client ListenNotes
+# ListenNotes client configuration
 client = podcast_api.Client(api_key=listennotes_api)
 
-# Configuration du client AssemblyAI pour la transcription
+# AssemblyAI client configuration
 aai.settings.api_key = assemblyai_api
 config = aai.TranscriptionConfig(
-    speaker_labels=True, 
-    language_detection=True, 
+    speaker_labels=True,
+    language_detection=True,
     summarization=True,
     summary_model=aai.SummarizationModel.conversational,
     summary_type=aai.SummarizationType.bullets,
@@ -363,10 +341,10 @@ config = aai.TranscriptionConfig(
 )
 transcriber = aai.Transcriber(config=config)
 
-# Configuration du client Spotify
+# Spotify client configuration
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=spotify_api_id,client_secret=spotify_api_secret))
 
-# Mapping des messages
+# Service mappings and configurations
 progress_messages = {
     0: "Operation in progress. Please wait.",
     10: "Just getting started! Warming up our digital ears.",
@@ -380,30 +358,40 @@ progress_messages = {
     90: "So close! Just dotting the i's and crossing the t's.",
     100: "Voilà! Your transcription is ready!"
 }
+
+# Service identification mappings
 service_title = {
     'ln': "ListenNotes Podcast",
     'sp': "Spotify Podcast",
     'yt': "YouTube Video",
     'dt': "Direct Link",
 }
+
+# Service descriptions for UI
 service_intro = {
     'ln': "Quickly access your past transcriptions from ListenNotes using the **unique ID** or by **text search**. Relive your podcast audio content through clear, structured transcriptions.",
     'sp': "Your favorite podcasts deserve to be read too. AudioScribe makes transcribing any podcast on Spotify easy, allowing you to access written content in an instant.Enter the URL of your Spotify podcast to receive a detailed and accurate transcription.",
     'yt': "Turn video content into text with precision. Whether it's for study, content, or convenience, AudioScribe makes video transcription seamless and straightforward.Get your YouTube video transcribed in just a few clicks. Simply paste the URL below.",
     'dt': "Turn audio content into text with precision. Whether it's for study, content, or convenience, AudioScribe makes audio transcription seamless and straightforward. Simply paste the URL below.",
 }
+
+# Input placeholders by service
 service_input = {
     'ln': "insert ID or keyword...",
     'sp': "insert Spotify podcast URL or ID...",
     'yt': "insert YouTube video URL or ID...",
     'dt': "insert audio URL...",
 }
+
+# Service logo URLs
 service_logo = {
     'ln': "https://brand-assets-cdn.listennotes.com/brand-assets-listennotes-com/production/media/image-89a6b237f0974f5c13b8b8b65816c2b7.png",
     'sp': "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Spotify_1.png/235px-Spotify_1.png",
     'yt': "https://upload.wikimedia.org/wikipedia/commons/b/b8/YouTube_Logo_2017.svg",
     'dt': "",
 }
+
+# Available services information
 multi = '''
 Here are the currently functional services:
 - Listen Notes 🎧 : ID, Search
@@ -412,7 +400,7 @@ Here are the currently functional services:
 - File  : Upload
 '''
 
-# Custom CSS to inject
+# Custom CSS styles for UI components
 tabs_font_css = """
 <style>
 html, body, h1, h2, h3, [class*="css"]  {
@@ -429,16 +417,9 @@ button[data-baseweb="tab"] p {
 }
 </style>
 """
-st.write(tabs_font_css, unsafe_allow_html=True)
 
-# Variable de test : 
-# ln_episode_input = c9af1e9a2cf7425c9bb60b9b15b0fd4e
-# ln_episode_input = Comment rater un recrutement en 5 phases 
-# ln_audio_length_sec = '481'
-# ln_audio_url = 'https://www.listennotes.com/e/p/c9af1e9a2cf7425c9bb60b9b15b0fd4e/'
-# ln_transcript_id = "c37b581d-791f-4d67-9402-80217eab7b37"
-# https://youtu.be/gxHBAM-ww-w
-# https://open.spotify.com/episode/2Jg3DWJ7LLNePNRM4SotDk?si=c99b94ee1ee741ad
+# Apply custom CSS
+st.write(tabs_font_css, unsafe_allow_html=True)
 
 # Initialize session state variables if they don't exist
 if 'file_uploaded' not in ss:
@@ -455,7 +436,7 @@ if 'disable_button_step_2'not in ss:
     ss.disable_button_step_2 = True
 if 'transcription_result' not in ss:
     ss.transcription_result = ""
-if "copied" not in ss: 
+if "copied" not in ss:
     ss.copied = []
 
 # App Header
@@ -478,7 +459,7 @@ with st.form(key="input_form"):
         ss.file_uploaded = True
     else:
         ss.file_uploaded = False
-    # Bouton de soumission
+    # Button submission
     submit_button = st.form_submit_button(label=':memo: Start Transcription', type='primary')
     if submit_button:
         errors = []
@@ -490,8 +471,8 @@ with st.form(key="input_form"):
         else:
             if file is not None:
                 file_details = {
-                    "filename":file.name, 
-                    "filetype":file.type,          
+                    "filename":file.name,
+                    "filetype":file.type,
                     "filesize":file.size
                 }
                 input = upload_file_url(file)
@@ -515,11 +496,13 @@ if ss.step_1_ok:
         audio_link = data['link']
         audio_length_sec = data['audio_length_sec']
         audio_url = data['audio']
+
         # Save into state_session
         ss.audio_length_sec = audio_length_sec
         ss.audio_url = audio_url
         ss.audio_title = audio_title
         ss.audio_link = audio_link
+
         # Layout
         if service_logo[service_code]:
             st.markdown(f'You have selected: {service_title.get(service_code, "Service not recognized")} as source. Is this correct? <img  style="float: inline-end;" src="{service_logo[service_code]}" width="auto" height="25"/>', unsafe_allow_html=True)
@@ -527,7 +510,7 @@ if ss.step_1_ok:
             st.markdown(f'You have selected: {service_title.get(service_code, "Service not recognized")} as source. Is this correct?', unsafe_allow_html=True)
         with st.container(border=True):
             on = st.toggle('Yes',key="input_confirm", on_change=disabled_submit_button_step_2)
-            st.warning('Make sure this is the correct data or file before confirming.')            
+            st.warning('Make sure this is the correct data or file before confirming.')
             button_step_2 = st.button(label='I confirm, start transcription!', type='primary', disabled=ss.disable_button_step_2)
             if button_step_2:
                 ss.step_2_ok = True
@@ -543,7 +526,7 @@ if ss.step_2_ok:
     if ss.completed == False:
         with st.spinner(f':sparkles: Waiting time : {convert_time_format(ss.audio_length_sec)}'):
             response = process_transcription(ss.audio_url, ss.audio_title, ss.audio_link)
-    
+
 # Step 4: Displaying Results
 if ss.completed:
     st.markdown("Voilà! Your transcription is ready!")

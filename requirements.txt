@@ -3,4 +3,4 @@ listennotes
 podcast-api
 assemblyai
 yt_dlp
-spotipy
+spotipy 
